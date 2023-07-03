@@ -40,7 +40,7 @@ void app_main() {
     auto module = Module(&hal, NSS_PIN, DIO1_PIN, RESET_PIN, BUSY_PIN);
     auto rf     = LLCC68(&module);
     auto st     = rf.begin();
-    if (st != RADIOLIB_ERR_NONE) {
+        if (st != RADIOLIB_ERR_NONE) {
       ESP_LOGE("rf", "failed, code %d\n", st);
       esp_restart();
     }
@@ -79,16 +79,6 @@ void app_main() {
       }
       uint8_t buf[256];
 
-      // for some reason failed to set CAD mode
-      auto st = rf.scanChannel();
-      // https://github.com/jgromes/RadioLib/discussions/446
-      while (st != RADIOLIB_CHANNEL_FREE) {
-        // https://github.com/espressif/arduino-esp32/issues/3871#issuecomment-913186206
-        // have to break for a while to feed the dog
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        ESP_LOGW("rf", "channel is not free, code %d", st);
-        st = rf.scanChannel();
-      }
       auto sz = boring::toBytes(b, buf);
       encoder.setPayload(buf, sz);
       auto maybe = encoder.next();
