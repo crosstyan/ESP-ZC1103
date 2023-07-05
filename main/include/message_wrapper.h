@@ -47,9 +47,9 @@ namespace MessageWrapper {
   uint16_t getUniquePktId(const WrapperHeader &header);
 
   class Encoder {
-    etl::vector<char, MAX_ENCODER_OUTPUT_SIZE> output;
+    etl::vector<uint8_t, MAX_ENCODER_OUTPUT_SIZE> output;
     WrapperHeader header{};
-    char *message = nullptr;
+    uint8_t *message = nullptr;
     size_t total_message_size = 0;
     size_t cur_left = 0;
   public:
@@ -60,7 +60,7 @@ namespace MessageWrapper {
      * @brief iterator like. return `etl::nullopt` when finished, otherwise return the next encoded packet.
      */
     [[nodiscard]]
-    etl::optional<etl::vector<char, MAX_ENCODER_OUTPUT_SIZE>> next();
+    etl::optional<etl::vector<uint8_t, MAX_ENCODER_OUTPUT_SIZE>> next();
 
     /*
      * @param src 3 bytes
@@ -75,21 +75,21 @@ namespace MessageWrapper {
   class Decoder {
     /// if decoding then header from first packet is determined
     bool _decoding = false;
-    etl::vector<char, MAX_DECODER_OUTPUT_SIZE> output;
+    etl::vector<uint8_t, MAX_DECODER_OUTPUT_SIZE> output;
     WrapperHeader header{};
   public:
     /// pure function
-    static etl::optional<WrapperHeader> decodeHeader(const char *message, size_t size);
+    static etl::optional<WrapperHeader> decodeHeader(const uint8_t *message, size_t size);
 
     static void printHeader(const WrapperHeader &header);
 
     /*
      * @brief when `WrapperDecodeResult::Finished` is returned then use `getOutput()` to retrieve the output
      */
-    WrapperDecodeResult decode(const char *message, size_t size);
+    WrapperDecodeResult decode(const uint8_t *message, size_t size);
 
     [[nodiscard]]
-    const etl::vector<char, MAX_DECODER_OUTPUT_SIZE> &getOutput() const;
+    const etl::vector<uint8_t, MAX_DECODER_OUTPUT_SIZE> &getOutput() const;
 
     void reset();
   };

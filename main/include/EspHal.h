@@ -313,7 +313,8 @@ public:
   }
 
   void yield() override {
-    vTaskDelay(1 / portTICK_PERIOD_MS);
+    // vTaskDelay(1);
+    taskYIELD();
   }
 
 private:

@@ -22,38 +22,38 @@ void MessageWrapper::Encoder::reset(const uint8_t *src, const uint8_t *dst, uint
   header.pkt_id = pkt_id;
 }
 
-inline void static push_back_many(etl::ivector<char> &vec, const char *data, size_t size) {
+inline void static push_back_many(etl::ivector<uint8_t> &vec, const char *data, size_t size) {
   for (size_t i = 0; i < size; i++) {
     vec.push_back(data[i]);
   }
 }
 
-inline void static push_back_many(etl::ivector<char> &vec, const uint8_t *data, size_t size) {
-  auto d = reinterpret_cast<const char *>(data);
+inline void static push_back_many(etl::ivector<uint8_t> &vec, const uint8_t *data, size_t size) {
+  auto d = reinterpret_cast<const uint8_t *>(data);
   for (size_t i = 0; i < size; i++) {
     vec.push_back(d[i]);
   }
 }
 
-inline void static add_padding(etl::ivector<char> &vec, size_t size) {
+inline void static add_padding(etl::ivector<uint8_t> &vec, size_t size) {
   for (size_t i = 0; i < size; i++) {
     vec.push_back(0);
   }
 }
 
-void MessageWrapper::Encoder::setPayload(const char *payload, size_t size) {
-  this->message            = const_cast<char *>(payload);
+void MessageWrapper::Encoder::setPayload(const uint8_t *payload, size_t size) {
+  this->message            = const_cast<uint8_t *>(payload);
   this->total_message_size = size;
   this->cur_left           = size;
 }
 
-void MessageWrapper::Encoder::setPayload(const uint8_t *payload, size_t size) {
-  setPayload(reinterpret_cast<const char *>(payload), size);
+void MessageWrapper::Encoder::setPayload(const char *payload, size_t size) {
+  setPayload(reinterpret_cast<const uint8_t *>(payload), size);
 }
 
 // TODO: optimize this
 // eats 256 bytes of Flash
-etl::optional<etl::vector<char, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>> MessageWrapper::Encoder::next() {
+etl::optional<etl::vector<uint8_t, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>> MessageWrapper::Encoder::next() {
   if (this->message == nullptr) {
     return etl::nullopt;
   }
@@ -93,7 +93,7 @@ etl::optional<etl::vector<char, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>> Messag
 
 // TODO: optimize this
 // eats 132 bytes of Flash
-etl::optional<MessageWrapper::WrapperHeader> MessageWrapper::Decoder::decodeHeader(const char *message, size_t size) {
+etl::optional<MessageWrapper::WrapperHeader> MessageWrapper::Decoder::decodeHeader(const uint8_t *message, size_t size) {
   if (size < HEADER_SIZE) {
     return etl::nullopt;
   }
@@ -109,7 +109,7 @@ etl::optional<MessageWrapper::WrapperHeader> MessageWrapper::Decoder::decodeHead
   return etl::make_optional(header);
 }
 
-MessageWrapper::WrapperDecodeResult MessageWrapper::Decoder::decode(const char *message, size_t size) {
+MessageWrapper::WrapperDecodeResult MessageWrapper::Decoder::decode(const uint8_t *message, size_t size) {
   auto h = decodeHeader(message, size);
   if (!h.has_value()) {
     return WrapperDecodeResult::BadHeader;
@@ -159,7 +159,7 @@ void MessageWrapper::Decoder::reset() {
   _decoding = false;
 }
 
-const etl::vector<char, MessageWrapper::MAX_DECODER_OUTPUT_SIZE> &MessageWrapper::Decoder::getOutput() const {
+const etl::vector<uint8_t, MessageWrapper::MAX_DECODER_OUTPUT_SIZE> &MessageWrapper::Decoder::getOutput() const {
   return output;
 }
 

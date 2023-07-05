@@ -7,3 +7,9 @@
 [submodule "components/cnl/cnl"]
 	path = components/cnl/cnl
 	url = https://github.com/johnmcfarlane/cnl
+[submodule "components/esp-nimble-cpp"]
+	path = components/esp-nimble-cpp
+	url = https://github.com/h2zero/esp-nimble-cpp
+[submodule "components/cpp-channel/cpp-channel"]
+	path = components/cpp-channel/cpp-channel
+	url = https://github.com/andreiavrammsd/cpp-channel
