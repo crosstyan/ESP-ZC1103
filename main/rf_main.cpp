@@ -153,7 +153,6 @@ void app_main() {
   auto rf_recv_task = [](void *pvParameters) {
     auto &rf_param = *static_cast<RfTaskParam *>(pvParameters);
     auto &rf       = *rf_param.rf;
-    auto &chan     = *rf_param.channel;
     uint8_t buf[256];
     while (true) {
       if (RX_FLAG) {
@@ -177,17 +176,16 @@ void app_main() {
           ESP_LOGE("rf", "failed to decode message, code %s", err_str);
         }
       } else {
-        // taskYIELD();
         vTaskDelay(10);
       }
     }
   };
 
   xTaskCreate(rf_recv_task, "rf_recv_task", 4096, &rf_send_task_param, 1, nullptr);
-  xTaskCreate(rf_send_task, "rf_send_task", 4096, &rf_send_task_param, 1, nullptr);
+  xTaskCreate(rf_send_task, "rf_send_task", 4096, &rf_send_task_param, 2, nullptr);
   xTaskCreate(led_task, "led_task", 4096, &led_task_param, 1, nullptr);
   // keep `app_main()` alive forever to prevent the stack variables from being destroyed
   while (true) {
-    vTaskDelay(1);
+    vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
