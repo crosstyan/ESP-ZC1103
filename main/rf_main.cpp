@@ -15,7 +15,6 @@
 #include <msd/channel.hpp>
 #include <memory>
 #include "utils.h"
-#include "channel.h"
 #include <rtc_wdt.h>
 
 extern "C" void app_main();
