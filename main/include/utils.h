@@ -34,6 +34,10 @@ void printWithSize(const char *str, size_t size, bool hex=false) {
   }
 };
 
+void printWithSize(const etl::ivector<uint8_t> &vec, bool hex=false) {
+  utils::printWithSize(reinterpret_cast<const char*>(vec.data()), vec.size(), hex);
+};
+
 void printWithSize(const etl::ivector<char> &vec, bool hex=false) {
   utils::printWithSize(vec.data(), vec.size(), hex);
 };

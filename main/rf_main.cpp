@@ -31,9 +31,13 @@ static auto const DIO3_PIN  = GPIO_NUM_27;
 static auto const TX_EN     = GPIO_NUM_25;
 static auto const RX_EN     = GPIO_NUM_26;
 
+/// global flag to indicate packet reception
+static bool RX_FLAG = false;
+
 using MessageVector = etl::vector<uint8_t, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>;
 using MessageQueue  = msd::channel<MessageVector>;
 
+// TODO: a mutex for RF
 struct RfTaskParam {
   LLCC68 *rf;
   std::shared_ptr<MessageQueue> channel;
@@ -54,14 +58,18 @@ void app_main() {
   auto module = Module(&hal, NSS_PIN, DIO1_PIN, RESET_PIN, BUSY_PIN);
   auto rf     = LLCC68(&module);
   auto st     = rf.begin();
-
   if (st != RADIOLIB_ERR_NONE) {
     ESP_LOGE("rf", "failed, code %d", st);
     esp_restart();
   }
+
+  rf.setPacketReceivedAction([]() {
+    RX_FLAG = true;
+  });
+
   ESP_LOGI("rf", "RF init success!");
-  auto chan          = std::make_shared<MessageQueue>();
-  auto rf_task_param = RfTaskParam{
+  auto chan               = std::make_shared<MessageQueue>();
+  auto rf_send_task_param = RfTaskParam{
       .rf      = &rf,
       .channel = chan,
   };
@@ -69,12 +77,12 @@ void app_main() {
       .channel = chan,
   };
   auto led_task = [](void *pvParameters) {
-    auto &param = *static_cast<LedTaskParam *>(pvParameters);
-    auto &chan  = *param.channel;
+    auto &param    = *static_cast<LedTaskParam *>(pvParameters);
+    auto &chan     = *param.channel;
     uint8_t src[3] = {0x01, 0x02, 0x03};
     uint8_t dst[3] = {0xff, 0xff, 0xff};
     uint8_t pkt_id = 0;
-    auto d         = std::chrono::milliseconds(500);
+    auto d         = std::chrono::milliseconds(5000);
     auto rng       = etl::random_xorshift();
     rng.initialise(0);
     uint8_t rgb;
@@ -117,7 +125,7 @@ void app_main() {
     }
   };
 
-  auto rf_task = [](void *pvParameters) {
+  auto rf_send_task = [](void *pvParameters) {
     // Channel Activity Detection
     // https://github.com/jgromes/RadioLib/blob/bea5e70d0ad4f6df74a4eb2a3d1bdb683014d6c1/examples/SX126x/SX126x_Channel_Activity_Detection_Interrupt/SX126x_Channel_Activity_Detection_Interrupt.ino#L4
     // https://github.com/jgromes/RadioLib/blob/bea5e70d0ad4f6df74a4eb2a3d1bdb683014d6c1/examples/SX128x/SX128x_Channel_Activity_Detection_Blocking/SX128x_Channel_Activity_Detection_Blocking.ino#L54
@@ -142,7 +150,41 @@ void app_main() {
     }
   };
 
-  xTaskCreate(rf_task, "rf_task", 4096, &rf_task_param, 1, nullptr);
+  auto rf_recv_task = [](void *pvParameters) {
+    auto &rf_param = *static_cast<RfTaskParam *>(pvParameters);
+    auto &rf       = *rf_param.rf;
+    auto &chan     = *rf_param.channel;
+    uint8_t buf[256];
+    while (true) {
+      if (RX_FLAG) {
+        auto sz = rf.getPacketLength(true);
+        auto r  = rf.readData(buf, sz);
+        RX_FLAG = false;
+        if (r != RADIOLIB_ERR_NONE) {
+          ESP_LOGE("rf", "failed to read data, code %d", r);
+        }
+        auto decoder = MessageWrapper::Decoder();
+        auto res     = decoder.decode(buf, sz);
+        if (res == MessageWrapper::WrapperDecodeResult::Finished) {
+          auto &msg = decoder.getOutput();
+          printf("[INFO] received message: ");
+          utils::printWithSize(msg, true);
+          printf("\n");
+        } else if (res == MessageWrapper::WrapperDecodeResult::Unfinished) {
+          continue;
+        } else {
+          auto err_str = MessageWrapper::decodeResultToString(res);
+          ESP_LOGE("rf", "failed to decode message, code %s", err_str);
+        }
+      } else {
+        // taskYIELD();
+        vTaskDelay(10);
+      }
+    }
+  };
+
+  xTaskCreate(rf_recv_task, "rf_recv_task", 4096, &rf_send_task_param, 1, nullptr);
+  xTaskCreate(rf_send_task, "rf_send_task", 4096, &rf_send_task_param, 1, nullptr);
   xTaskCreate(led_task, "led_task", 4096, &led_task_param, 1, nullptr);
   // keep `app_main()` alive forever to prevent the stack variables from being destroyed
   while (true) {
