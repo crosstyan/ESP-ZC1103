@@ -12,8 +12,10 @@
 #include <etl/expected.h>
 
 namespace RfMessage {
-const auto SPOT_CONFIG_MAGIC = 0x80;
-const auto SPOT_MAGIC        = 0x76;
+const uint8_t SPOT_CONFIG_MAGIC = 0x80;
+const uint8_t SPOT_MAGIC        = 0x76;
+const uint8_t SET_CURRENT_MAGIC = 0x86;
+const uint8_t PING_MAGIC        = 0x06;
 
 const auto MAX_SPEED_MAP_SIZE  = 16;
 const auto MAX_ENABLED_ID_SIZE = 16;
@@ -21,6 +23,7 @@ const auto MAX_TRACK_SIZE      = 3;
 
 // could choose fixed_8_8 or fixed_16_16
 using speed_type = fixed_8_8;
+
 
 inline static int64_t millis() {
   return (esp_timer_get_time() / 1000);
@@ -55,6 +58,29 @@ enum class SpotState {
   STOP,
   START,
 };
+
+struct SetCurrent {
+  uint16_t current_id;
+  static size_t sizeNeeded() {
+    // magic, current_id
+    size_t sz = 0;
+    sz += sizeof SET_CURRENT_MAGIC;
+    sz += sizeof current_id;
+    return sz;
+  }
+  static etl::expected<SetCurrent, ParseResult> fromBytes(const uint8_t *buffer) {
+    if (buffer[0] != SET_CURRENT_MAGIC) {
+      auto ue = etl::unexpected(ParseResult::MAGIC_ERROR);
+      return etl::expected<SetCurrent, ParseResult>(ue);
+    }
+    SetCurrent set_current;
+    size_t offset          = sizeof SET_CURRENT_MAGIC;
+    set_current.current_id = buffer[offset];
+    return etl::expected<SetCurrent, ParseResult>(set_current);
+  }
+};
+
+struct Ping {};
 
 struct SpotConfig {
   fixed_16_16 circleLength;
@@ -232,6 +258,8 @@ public:
   }
 };
 
+using Tracks = etl::vector<Track, MAX_TRACK_SIZE>;
+
 namespace serd {
   size_t toBytes(const Track &track, uint8_t *bytes) {
     auto offset = 0;
@@ -285,6 +313,21 @@ namespace serd {
     auto updateInterval = __htons(config.updateInterval);
     memcpy(bytes + offset, &updateInterval, sizeof updateInterval);
     offset += sizeof updateInterval;
+    return offset;
+  }
+  size_t toBytes(const SetCurrent &set_current, uint8_t *bytes) {
+    auto offset = 0;
+    bytes[0]    = SET_CURRENT_MAGIC;
+    offset += 1;
+    auto current = __htons(set_current.current_id);
+    memcpy(bytes + offset, &current, sizeof current);
+    offset += sizeof current;
+    return offset;
+  }
+  size_t toBytes(const Ping &ping, uint8_t *bytes) {
+    auto offset = 0;
+    bytes[0]    = PING_MAGIC;
+    offset += 1;
     return offset;
   }
 }
@@ -398,6 +441,7 @@ public:
     return tracks;
   }
 
+  /// @brief mutate the Spot object directly
   ParseResult fromBytes(uint8_t *bytes) {
     auto offset = 0;
     if (bytes[offset] != SPOT_MAGIC) {

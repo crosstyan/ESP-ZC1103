@@ -78,15 +78,21 @@ namespace MessageWrapper {
     etl::vector<uint8_t, MAX_DECODER_OUTPUT_SIZE> output;
     WrapperHeader header{};
   public:
-    /// pure function
-    static etl::optional<WrapperHeader> decodeHeader(const uint8_t *message, size_t size);
+    /**
+     * @brief decode the header of the message
+     * @param message
+     * @param size
+     * @param is_simple skip parse the address field. i.e. SimpleWrapper. Message id would be ignored as well.
+     * @return
+     */
+    static etl::optional<WrapperHeader> decodeHeader(const uint8_t *message, size_t size, bool is_simple = false);
 
     static void printHeader(const WrapperHeader &header);
 
     /*
      * @brief when `WrapperDecodeResult::Finished` is returned then use `getOutput()` to retrieve the output
      */
-    WrapperDecodeResult decode(const uint8_t *message, size_t size);
+    MessageWrapper::WrapperDecodeResult decode(const uint8_t *message, size_t size, bool is_simple = false);
 
     [[nodiscard]]
     const etl::vector<uint8_t, MAX_DECODER_OUTPUT_SIZE> &getOutput() const;

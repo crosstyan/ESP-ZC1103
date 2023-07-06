@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <msd/channel.hpp>
 #include <memory>
+#include <utility>
 #include "utils.h"
 #include <NimBLEDevice.h>
 #include <rtc_wdt.h>
@@ -36,33 +37,59 @@ static auto const DIO3_PIN  = GPIO_NUM_27;
 static auto const TX_EN     = GPIO_NUM_25;
 static auto const RX_EN     = GPIO_NUM_26;
 
-static auto const BLE_NAME        = "TRACK_HUB";
-static auto const BLE_SERVER_UUID = "1f6cc873-c9d4-49c0-845c-02dbd21e4fe3";
+static auto const BLE_NAME             = "TRACK_HUB";
+static auto const BLE_SERVER_UUID      = "1f6cc873-c9d4-49c0-845c-02dbd21e4fe3";
 static auto const BLE_CONFIG_CHAR_UUID = "77de9e2b-66e1-42e8-9b1f-5dae1c5f2737";
 
 /// global flag to indicate packet reception
 static bool RX_FLAG = false;
 
 using MessageVector = etl::vector<uint8_t, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>;
-using MessageQueue  = msd::channel<MessageVector>;
+using RfMessageChan = msd::channel<MessageVector>;
 
 // TODO: a mutex for RF
 struct RfTaskParam {
   LLCC68 *rf;
-  std::shared_ptr<MessageQueue> channel;
+  std::shared_ptr<RfMessageChan> channel;
 };
 
 struct LedTaskParam {
-  std::shared_ptr<MessageQueue> channel;
+  std::shared_ptr<RfMessageChan> channel;
 };
 
-class ConfigCharCallback: public BLECharacteristicCallbacks {
+using BleMsgChan = msd::channel<RfMessage::BleMsgDecodeRes>;
+
+class ConfigCharCallback : public BLECharacteristicCallbacks {
 private:
-  std::shared_ptr<MessageQueue> channel_;
+  std::shared_ptr<BleMsgChan> channel_;
+  MessageWrapper::Decoder decoder_;
+
 public:
-  void onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo& connInfo) override {
+  // please note that it's the `simple wrapper` instead of `message wrapper` which has `src`, `dst` and `pkt_id` fields
+  void onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo &connInfo) override {
+    auto val  = characteristic->getValue();
+    auto data = val.data();
+    auto sz   = val.size();
+    auto res  = decoder_.decode(data, sz, true);
+    if (res == MessageWrapper::WrapperDecodeResult::Finished) {
+      auto &payload      = decoder_.getOutput();
+      auto maybe_ble_res = RfMessage::decodeBleMsg(payload.data(), payload.size());
+      if (maybe_ble_res.has_value()) {
+        auto &ble_res = maybe_ble_res.value();
+        auto &chan    = *channel_;
+        chan << ble_res;
+        decoder_.reset();
+      }
+    } else if (res == MessageWrapper::WrapperDecodeResult::Unfinished) {
+      return;
+    } else {
+      auto reason = MessageWrapper::decodeResultToString(res);
+      ESP_LOGE("ble", "failed to decode BLE message: %s", reason);
+    }
   };
-  explicit ConfigCharCallback(std::shared_ptr<MessageQueue> channel): channel_(std::move(channel)) {};
+  explicit ConfigCharCallback(std::shared_ptr<BleMsgChan> channel) : channel_(std::move(channel)) {
+    decoder_ = MessageWrapper::Decoder();
+  };
 };
 
 void app_main() {
@@ -88,20 +115,19 @@ void app_main() {
   ESP_LOGI("rf", "RF init success!");
 
   BLEDevice::init(BLE_NAME);
-  auto &server = *BLEDevice::createServer();
-  auto &service = *server.createService(BLE_SERVER_UUID);
+  auto &server      = *BLEDevice::createServer();
+  auto &service     = *server.createService(BLE_SERVER_UUID);
   auto &advertising = *BLEDevice::getAdvertising();
   // https://github.com/h2zero/esp-nimble-cpp/blob/1786d0ede39d33369ce8c21ff3b5de45b17594f2/examples/basic/BLE_server/main/main.cpp#L32-L41
   auto &config_char = *service.createCharacteristic(
       BLE_CONFIG_CHAR_UUID,
-      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
-  );
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
   advertising.setName(BLE_NAME);
   advertising.setScanResponse(false);
   server.start();
   ESP_LOGI("ble", "BLE init success!");
 
-  auto chan               = std::make_shared<MessageQueue>();
+  auto chan               = std::make_shared<RfMessageChan>();
   auto rf_send_task_param = RfTaskParam{
       .rf      = &rf,
       .channel = chan,
@@ -196,7 +222,7 @@ void app_main() {
         if (r != RADIOLIB_ERR_NONE) {
           ESP_LOGE("rf", "failed to read data, code %d", r);
         }
-        auto res = decoder.decode(buf, sz);
+        auto res = decoder.decode(buf, sz, false);
         if (res == MessageWrapper::WrapperDecodeResult::Finished) {
           auto &msg = decoder.getOutput();
           printf("[INFO] received message: ");

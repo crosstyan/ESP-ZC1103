@@ -93,24 +93,35 @@ etl::optional<etl::vector<uint8_t, MessageWrapper::MAX_ENCODER_OUTPUT_SIZE>> Mes
 
 // TODO: optimize this
 // eats 132 bytes of Flash
-etl::optional<MessageWrapper::WrapperHeader> MessageWrapper::Decoder::decodeHeader(const uint8_t *message, size_t size) {
+etl::optional<MessageWrapper::WrapperHeader> MessageWrapper::Decoder::decodeHeader(const uint8_t *message, size_t size, bool is_simple) {
   if (size < HEADER_SIZE) {
     return etl::nullopt;
   }
   WrapperHeader header{};
-  memcpy(header.src, message, 3);
-  memcpy(header.dst, message + 3, 3);
-  header.pkt_id        = message[6];
-  header.pkt_cur_count = message[7];
-  // decode 8 & 9
-  auto host_total_payload_size = __ntohs(*reinterpret_cast<const uint16_t *>(message + 8));
-  header.total_payload_size    = host_total_payload_size;
-  header.cur_payload_size      = message[10];
+  if (!is_simple){
+    memcpy(header.src, message, 3);
+    memcpy(header.dst, message + 3, 3);
+    header.pkt_id        = message[6];
+    header.pkt_cur_count = message[7];
+    // decode 8 & 9
+    auto host_total_payload_size = __ntohs(*reinterpret_cast<const uint16_t *>(message + 8));
+    header.total_payload_size    = host_total_payload_size;
+    header.cur_payload_size      = message[10];
+  } else {
+    size_t offset = 0;
+    header.pkt_cur_count = message[offset];
+    offset += 1;
+    // decode 8 & 9
+    auto host_total_payload_size = __ntohs(*reinterpret_cast<const uint16_t *>(message + offset));
+    header.total_payload_size    = host_total_payload_size;
+    offset += 2;
+    header.cur_payload_size      = message[offset];
+  }
   return etl::make_optional(header);
 }
 
-MessageWrapper::WrapperDecodeResult MessageWrapper::Decoder::decode(const uint8_t *message, size_t size) {
-  auto h = decodeHeader(message, size);
+MessageWrapper::WrapperDecodeResult MessageWrapper::Decoder::decode(const uint8_t *message, size_t size, bool is_simple) {
+  auto h = decodeHeader(message, size, is_simple);
   if (!h.has_value()) {
     return WrapperDecodeResult::BadHeader;
   }
@@ -131,17 +142,19 @@ MessageWrapper::WrapperDecodeResult MessageWrapper::Decoder::decode(const uint8_
     }
     // following packets
   } else {
-    if (header.pkt_id != h.value().pkt_id) {
-      return WrapperDecodeResult::UnexpectedPktId;
+    if (!is_simple){
+      if (header.pkt_id != h.value().pkt_id) {
+        return WrapperDecodeResult::UnexpectedPktId;
+      }
+      if (memcmp(header.src, h.value().src, 3) != 0) {
+        return WrapperDecodeResult::UnexpectedSrc;
+      }
     }
     if (header.total_payload_size != h.value().total_payload_size) {
       return WrapperDecodeResult::UnexpectedTotalPayloadSize;
     }
     if ((header.pkt_cur_count + 1) != h.value().pkt_cur_count) {
       return WrapperDecodeResult::UnexpectedPktCount;
-    }
-    if (memcmp(header.src, h.value().src, 3) != 0) {
-      return WrapperDecodeResult::UnexpectedSrc;
     }
     push_back_many(output, message + HEADER_SIZE, header.cur_payload_size);
     if (output.size() >= header.total_payload_size) {
