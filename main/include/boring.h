@@ -9,7 +9,7 @@
 #include <etl/vector.h>
 #include <etl/optional.h>
 
-namespace boring {
+namespace RfMessage {
 const uint8_t BORING_MAGIC            = 0x50;
 const uint8_t MAX_BORING_COMMENT_SIZE = 32;
 struct Boring {
@@ -53,7 +53,6 @@ etl::optional<Boring> fromBytes(const uint8_t *buffer) {
   }
   return etl::make_optional(boring);
 }
-
 }
 
 #endif // SIMPLE_BORING_H

@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message SpotConfig {
+  float circle_length=1;
+  float line_length=2;
+  uint32 total=3;
+  uint32 current=4;
+  uint32 update_interval=5;
+}

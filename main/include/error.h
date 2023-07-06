@@ -5,11 +5,12 @@
 #ifndef SIMPLE_ERROR_H
 #define SIMPLE_ERROR_H
 
-
+namespace RfMessage {
 enum class ParseResult {
   OK,
   MAGIC_ERROR,
   VALUE_ERROR,
 };
+}
 
 #endif // SIMPLE_ERROR_H

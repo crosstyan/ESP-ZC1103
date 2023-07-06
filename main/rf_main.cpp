@@ -15,7 +15,12 @@
 #include <msd/channel.hpp>
 #include <memory>
 #include "utils.h"
+#include <NimBLEDevice.h>
 #include <rtc_wdt.h>
+#include "message.h"
+
+// https://stackoverflow.com/questions/64017982/c-equivalent-of-rust-enums
+// https://thatonegamedev.com/cpp/rust-enums-in-modern-cpp/
 
 extern "C" void app_main();
 
@@ -31,6 +36,10 @@ static auto const DIO3_PIN  = GPIO_NUM_27;
 static auto const TX_EN     = GPIO_NUM_25;
 static auto const RX_EN     = GPIO_NUM_26;
 
+static auto const BLE_NAME        = "TRACK_HUB";
+static auto const BLE_SERVER_UUID = "1f6cc873-c9d4-49c0-845c-02dbd21e4fe3";
+static auto const BLE_CONFIG_CHAR_UUID = "77de9e2b-66e1-42e8-9b1f-5dae1c5f2737";
+
 /// global flag to indicate packet reception
 static bool RX_FLAG = false;
 
@@ -45,6 +54,15 @@ struct RfTaskParam {
 
 struct LedTaskParam {
   std::shared_ptr<MessageQueue> channel;
+};
+
+class ConfigCharCallback: public BLECharacteristicCallbacks {
+private:
+  std::shared_ptr<MessageQueue> channel_;
+public:
+  void onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo& connInfo) override {
+  };
+  explicit ConfigCharCallback(std::shared_ptr<MessageQueue> channel): channel_(std::move(channel)) {};
 };
 
 void app_main() {
@@ -68,6 +86,21 @@ void app_main() {
   });
 
   ESP_LOGI("rf", "RF init success!");
+
+  BLEDevice::init(BLE_NAME);
+  auto &server = *BLEDevice::createServer();
+  auto &service = *server.createService(BLE_SERVER_UUID);
+  auto &advertising = *BLEDevice::getAdvertising();
+  // https://github.com/h2zero/esp-nimble-cpp/blob/1786d0ede39d33369ce8c21ff3b5de45b17594f2/examples/basic/BLE_server/main/main.cpp#L32-L41
+  auto &config_char = *service.createCharacteristic(
+      BLE_CONFIG_CHAR_UUID,
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+  );
+  advertising.setName(BLE_NAME);
+  advertising.setScanResponse(false);
+  server.start();
+  ESP_LOGI("ble", "BLE init success!");
+
   auto chan               = std::make_shared<MessageQueue>();
   auto rf_send_task_param = RfTaskParam{
       .rf      = &rf,
@@ -100,16 +133,16 @@ void app_main() {
       }
       // refresh until at least one color is on and the color is different from the previous one
       while (!(temp != 0) || !(temp != rgb));
-      rgb                 = temp;
-      auto b              = boring::Boring();
-      b.led               = rgb;
-      const char *payload = "test";
+      rgb                = temp;
+      auto b             = RfMessage::Boring();
+      b.led              = rgb;
+      const auto payload = "test";
       for (auto i = 0; i < strlen(payload); i++) {
         b.comments.emplace_back(payload[i]);
       }
       uint8_t buf[256];
 
-      auto sz = boring::toBytes(b, buf);
+      auto sz = RfMessage::toBytes(b, buf);
       encoder.setPayload(buf, sz);
       auto maybe = encoder.next();
       while (maybe.has_value()) {
@@ -153,6 +186,7 @@ void app_main() {
   auto rf_recv_task = [](void *pvParameters) {
     auto &rf_param = *static_cast<RfTaskParam *>(pvParameters);
     auto &rf       = *rf_param.rf;
+    auto decoder   = MessageWrapper::Decoder();
     uint8_t buf[256];
     while (true) {
       if (RX_FLAG) {
@@ -162,8 +196,7 @@ void app_main() {
         if (r != RADIOLIB_ERR_NONE) {
           ESP_LOGE("rf", "failed to read data, code %d", r);
         }
-        auto decoder = MessageWrapper::Decoder();
-        auto res     = decoder.decode(buf, sz);
+        auto res = decoder.decode(buf, sz);
         if (res == MessageWrapper::WrapperDecodeResult::Finished) {
           auto &msg = decoder.getOutput();
           printf("[INFO] received message: ");
@@ -186,6 +219,6 @@ void app_main() {
   xTaskCreate(led_task, "led_task", 4096, &led_task_param, 1, nullptr);
   // keep `app_main()` alive forever to prevent the stack variables from being destroyed
   while (true) {
-    vTaskDelay(1000/portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }

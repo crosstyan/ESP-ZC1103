@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+message Track {
+  uint32 id = 1;
+  uint32 color = 2;
+  map<uint32, float> speeds = 3;
+}
+
+message Spot {
+  repeated Track tracks = 1;
+}

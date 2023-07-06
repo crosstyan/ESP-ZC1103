@@ -1,0 +1,18 @@
+syntax = "proto3";
+import public "spot_config.proto";
+import public "spot.proto";
+
+// https://github.com/crosstyan/track-esp32/blob/34563a59cc8ae7e6bf4c9a7cdc3d2d1ac27e8bf0/main/StripCallbacks.cpp#L60
+// to wrap around
+message Message {
+  // corsponds to the `dst` field in `message_wrapper`
+  oneof destination {
+    bytes device = 1;
+    // magic value for broadcast
+    int32 broadcast = 2;
+  }
+  oneof payload {
+    SpotConfig config = 3;
+    Spot spot = 4;
+  }
+}

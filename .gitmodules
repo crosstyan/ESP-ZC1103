@@ -13,3 +13,6 @@
 [submodule "components/cpp-channel/cpp-channel"]
 	path = components/cpp-channel/cpp-channel
 	url = https://github.com/andreiavrammsd/cpp-channel
+[submodule "components/nanopb/nanopb"]
+	path = components/nanopb/nanopb
+	url = https://github.com/nanopb/nanopb
