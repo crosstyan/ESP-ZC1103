@@ -9,7 +9,7 @@ message BleMessage {
   oneof destination {
     bytes device = 1;
     // magic value for broadcast
-    int32 broadcast = 2;
+    uint32 broadcast = 2;
   }
   oneof payload {
     SpotConfig config = 3;

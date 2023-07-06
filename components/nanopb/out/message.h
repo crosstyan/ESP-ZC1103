@@ -15,9 +15,10 @@
 
 namespace RfMessage {
 const static auto ADDR_SIZE = 3;
+using AddrArray             = etl::array<uint8_t, ADDR_SIZE>;
 using Message               = etl::variant<RfMessage::Tracks, RfMessage::SpotConfig, RfMessage::Ping, RfMessage::SetCurrent>;
 // certain target or broadcast
-using Destination = etl::variant<etl::array<uint8_t, ADDR_SIZE>, uint32_t>;
+using Destination = etl::variant<AddrArray, uint32_t>;
 
 struct BleMsgDecodeRes {
   Message msg;
@@ -26,9 +27,10 @@ struct BleMsgDecodeRes {
 
 etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) {
   BleMessage msg                      = BleMessage_init_zero;
-  auto addr                           = etl::array<uint8_t, 3>{0x00, 0x00, 0x00};
+  auto addr                           = AddrArray{0x00, 0x00, 0x00};
   msg.destination.device.funcs.decode = [](pb_istream_t *stream, const pb_field_t *field, void **arg) {
-    auto &dest = *static_cast<etl::array<uint8_t, ADDR_SIZE> *>(*arg);
+    auto &dest = *static_cast<AddrArray *>(*arg);
+    // TODO: is bytes_left the size of the array?
     if (!pb_read(stream, dest.data(), stream->bytes_left)) {
       return false;
     }
@@ -70,11 +72,13 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
   auto ret = BleMsgDecodeRes{};
   switch (msg.which_destination) {
     case BleMessage_broadcast_tag:
-      ret.dest = static_cast<uint32_t>(msg.destination.broadcast);
+      ret.dest = msg.destination.broadcast;
       break;
     case BleMessage_device_tag:
       ret.dest = std::move(addr);
       break;
+    default:
+      return etl::nullopt;
   }
   switch (msg.which_payload) {
     case BleMessage_spot_tag:

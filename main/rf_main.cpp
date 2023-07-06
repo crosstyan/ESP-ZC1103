@@ -79,6 +79,8 @@ public:
         auto &chan    = *channel_;
         chan << ble_res;
         decoder_.reset();
+      } else {
+        ESP_LOGE("ble", "bad BLE message");
       }
     } else if (res == MessageWrapper::WrapperDecodeResult::Unfinished) {
       return;
@@ -122,10 +124,12 @@ void app_main() {
   auto &config_char = *service.createCharacteristic(
       BLE_CONFIG_CHAR_UUID,
       NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+  auto ble_chan = std::make_shared<BleMsgChan>();
+  config_char.setCallbacks(new ConfigCharCallback(ble_chan));
   advertising.setName(BLE_NAME);
   advertising.setScanResponse(false);
+  service.start();
   server.start();
-  ESP_LOGI("ble", "BLE init success!");
 
   auto chan               = std::make_shared<RfMessageChan>();
   auto rf_send_task_param = RfTaskParam{

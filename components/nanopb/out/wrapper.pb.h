@@ -19,7 +19,7 @@ typedef struct _BleMessage {
     union {
         pb_callback_t device;
         /* magic value for broadcast */
-        int32_t broadcast;
+        uint32_t broadcast;
     } destination;
     pb_size_t which_payload;
     union {
@@ -52,7 +52,7 @@ extern "C" {
 /* Struct field encoding specification for nanopb */
 #define BleMessage_FIELDLIST(X, a) \
 X(a, CALLBACK, ONEOF,    BYTES,    (destination,device,destination.device),   1) \
-X(a, STATIC,   ONEOF,    INT32,    (destination,broadcast,destination.broadcast),   2) \
+X(a, STATIC,   ONEOF,    UINT32,   (destination,broadcast,destination.broadcast),   2) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,config,payload.config),   3) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,spot,payload.spot),   4) \
 X(a, STATIC,   ONEOF,    UINT32,   (payload,set_current,payload.set_current),   5) \
