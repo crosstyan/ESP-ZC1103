@@ -17,7 +17,7 @@ namespace RfMessage {
 const static auto MAX_RF_PAYLOAD_SIZE = 500;
 const static auto ADDR_SIZE           = 3;
 using AddrArray                       = etl::array<uint8_t, ADDR_SIZE>;
-using Message                         = etl::variant<RfMessage::Tracks, RfMessage::SpotConfig, RfMessage::Ping, RfMessage::SetCurrent>;
+using Message                         = etl::variant<RfMessage::Tracks, RfMessage::SpotConfig, RfMessage::CommandMessage, RfMessage::SetCurrent>;
 using RfPayload                       = etl::vector<uint8_t, MAX_RF_PAYLOAD_SIZE>;
 // certain target or broadcast
 using Destination = etl::variant<AddrArray, uint32_t>;
@@ -74,7 +74,7 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
   auto ret = BleMsgDecodeRes{};
   switch (msg.which_destination) {
     case BleMessage_broadcast_tag:
-      ret.dest = msg.destination.broadcast;
+      ret.dest = static_cast<uint32_t>(msg.destination.broadcast);
       break;
     case BleMessage_device_tag:
       ret.dest = std::move(addr);
@@ -96,8 +96,10 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
       ret.msg            = cfg;
       break;
     }
-    case BleMessage_ping_tag: {
-      ret.msg = Ping{};
+    case BleMessage_command_tag: {
+      auto c    = CommandMessage{};
+      c.command = static_cast<Command>(msg.payload.command);
+      ret.msg   = c;
       break;
     }
     case BleMessage_set_current_tag: {
@@ -117,7 +119,7 @@ struct EncodeVistor {
     auto payload = RfPayload{};
     auto sz      = RfMessage::Spot::sizeNeeded(tracks);
     payload.resize(sz);
-    auto out_sz = RfMessage::Spot::toBytes(tracks, payload.data());
+    auto out_sz = RfMessage::serd::toBytes(tracks, payload.data());
     assert(out_sz == sz);
     return payload;
   }
@@ -129,11 +131,11 @@ struct EncodeVistor {
     assert(out_sz == sz);
     return payload;
   }
-  RfPayload operator()(RfMessage::Ping &ping) {
+  RfPayload operator()(RfMessage::CommandMessage &cmd_msg) {
     auto payload = RfPayload{};
-    auto sz      = RfMessage::Ping::sizeNeeded();
+    auto sz      = RfMessage::CommandMessage::sizeNeeded();
     payload.resize(sz);
-    auto out_sz = RfMessage::serd::toBytes(ping, payload.data());
+    auto out_sz = RfMessage::serd::toBytes(cmd_msg, payload.data());
     assert(out_sz == sz);
     return payload;
   }

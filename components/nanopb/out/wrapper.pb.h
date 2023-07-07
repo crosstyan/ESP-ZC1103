@@ -11,6 +11,13 @@
 #error Regenerate this file with the current version of nanopb generator.
 #endif
 
+/* Enum definitions */
+typedef enum _Command {
+    Command_Start = 0,
+    Command_Stop = 1,
+    Command_Ping = 6
+} Command;
+
 /* Struct definitions */
 /* https://github.com/crosstyan/track-esp32/blob/34563a59cc8ae7e6bf4c9a7cdc3d2d1ac27e8bf0/main/StripCallbacks.cpp#L60
  to wrap around */
@@ -28,7 +35,7 @@ typedef struct _BleMessage {
         /* with payload */
         uint32_t set_current;
         /* just a magic */
-        uint32_t ping;
+        Command command;
     } payload;
 } BleMessage;
 
@@ -36,6 +43,14 @@ typedef struct _BleMessage {
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Helper constants for enums */
+#define _Command_MIN Command_Start
+#define _Command_MAX Command_Ping
+#define _Command_ARRAYSIZE ((Command)(Command_Ping+1))
+
+#define BleMessage_payload_command_ENUMTYPE Command
+
 
 /* Initializer values for message structs */
 #define BleMessage_init_default                  {0, {{{NULL}, NULL}}, 0, {SpotConfig_init_default}}
@@ -47,7 +62,7 @@ extern "C" {
 #define BleMessage_config_tag                    3
 #define BleMessage_spot_tag                      4
 #define BleMessage_set_current_tag               5
-#define BleMessage_ping_tag                      6
+#define BleMessage_command_tag                   6
 
 /* Struct field encoding specification for nanopb */
 #define BleMessage_FIELDLIST(X, a) \
@@ -56,7 +71,7 @@ X(a, STATIC,   ONEOF,    UINT32,   (destination,broadcast,destination.broadcast)
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,config,payload.config),   3) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,spot,payload.spot),   4) \
 X(a, STATIC,   ONEOF,    UINT32,   (payload,set_current,payload.set_current),   5) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload,ping,payload.ping),   6)
+X(a, STATIC,   ONEOF,    UENUM,    (payload,command,payload.command),   6)
 #define BleMessage_CALLBACK pb_default_field_callback
 #define BleMessage_DEFAULT NULL
 #define BleMessage_payload_config_MSGTYPE SpotConfig

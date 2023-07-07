@@ -15,7 +15,7 @@ namespace RfMessage {
 const uint8_t SPOT_CONFIG_MAGIC = 0x80;
 const uint8_t SPOT_MAGIC        = 0x76;
 const uint8_t SET_CURRENT_MAGIC = 0x86;
-const uint8_t PING_MAGIC        = 0x06;
+const uint8_t COMMAND_MAGIC        = 0x11;
 
 const auto MAX_SPEED_MAP_SIZE  = 16;
 const auto MAX_ENABLED_ID_SIZE = 16;
@@ -79,11 +79,19 @@ struct SetCurrent {
   }
 };
 
-struct Ping {
+enum class Command {
+  START = 0x00,
+  STOP  = 0x01,
+  Ping = 0x06
+};
+
+struct CommandMessage {
+  Command command;
   static size_t sizeNeeded() {
     // magic
     size_t sz = 0;
-    sz += sizeof PING_MAGIC;
+    sz += sizeof COMMAND_MAGIC;
+    sz += sizeof(uint8_t);
     return sz;
   }
 };
@@ -330,10 +338,27 @@ namespace serd {
     offset += sizeof current;
     return offset;
   }
-  size_t toBytes(const Ping &ping, uint8_t *bytes) {
+  size_t toBytes(const CommandMessage &command, uint8_t *bytes) {
     auto offset = 0;
-    bytes[0]    = PING_MAGIC;
+    bytes[0]    = COMMAND_MAGIC;
     offset += 1;
+    bytes[1] = static_cast<uint8_t>(command.command);
+    offset += sizeof(uint8_t);
+    return offset;
+  }
+
+  /// serialize a vector of Track to bytes with Spot format.
+  /// Spot is just a wrapper of many tracks.
+  size_t toBytes(etl::ivector<Track> &tracks, uint8_t *bytes) {
+    size_t offset = 0;
+    bytes[offset] = SPOT_MAGIC;
+    offset += 1;
+    bytes[offset] = static_cast<uint8_t>(tracks.size());
+    offset += 1;
+    for (auto &track : tracks) {
+      auto tSize = serd::toBytes(track, bytes + offset);
+      offset += tSize;
+    }
     return offset;
   }
 }
@@ -510,21 +535,6 @@ public:
     for (auto &track : tracks) {
       auto &[t, calc] = track;
       auto tSize      = serd::toBytes(t, bytes + offset);
-      offset += tSize;
-    }
-    return offset;
-  }
-
-  /// serialize a vector of Track to bytes with Spot format.
-  /// Spot is just a wrapper of many tracks.
-  static size_t toBytes(etl::ivector<Track> &tracks, uint8_t *bytes) {
-    size_t offset = 0;
-    bytes[offset] = SPOT_MAGIC;
-    offset += 1;
-    bytes[offset] = static_cast<uint8_t>(tracks.size());
-    offset += 1;
-    for (auto &track : tracks) {
-      auto tSize = serd::toBytes(track, bytes + offset);
       offset += tSize;
     }
     return offset;

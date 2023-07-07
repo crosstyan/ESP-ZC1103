@@ -59,8 +59,6 @@ struct LedTaskParam {
   std::shared_ptr<RfMessageChan> channel;
 };
 
-using BleMsgChan = msd::channel<RfMessage::BleMsgDecodeRes>;
-
 class ConfigCharCallback : public BLECharacteristicCallbacks {
 private:
   std::shared_ptr<RfMessageChan> channel_;

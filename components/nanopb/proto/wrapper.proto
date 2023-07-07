@@ -17,6 +17,12 @@ message BleMessage {
     // with payload
     uint32 set_current = 5;
     // just a magic
-    uint32 ping = 6;
+    Command command = 6;
   }
+}
+
+enum Command {
+  Start = 0x00;
+  Stop = 0x01;
+  Ping = 0x06;
 }
