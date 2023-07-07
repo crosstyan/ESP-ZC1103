@@ -114,7 +114,7 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
   return etl::make_optional(ret);
 }
 
-struct EncodeVistor {
+struct EncodeVisitor {
   RfPayload operator()(RfMessage::Tracks &tracks) {
     auto payload = RfPayload{};
     auto sz      = RfMessage::Spot::sizeNeeded(tracks);
@@ -150,7 +150,7 @@ struct EncodeVistor {
 };
 
 RfPayload toBytes(Message &message) {
-  return etl::visit(EncodeVistor{}, message);
+  return etl::visit(EncodeVisitor{}, message);
 }
 }
 

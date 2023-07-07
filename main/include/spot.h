@@ -16,7 +16,7 @@ namespace RfMessage {
 const uint8_t SPOT_CONFIG_MAGIC = 0x80;
 const uint8_t SPOT_MAGIC        = 0x76;
 const uint8_t SET_CURRENT_MAGIC = 0x86;
-const uint8_t COMMAND_MAGIC        = 0x11;
+const uint8_t COMMAND_MAGIC     = 0x11;
 
 const auto MAX_SPEED_MAP_SIZE  = 16;
 const auto MAX_ENABLED_ID_SIZE = 16;
@@ -83,7 +83,7 @@ struct SetCurrent {
 enum class Command {
   START = Command_Start,
   STOP  = Command_Stop,
-  Ping = Command_Ping,
+  Ping  = Command_Ping,
 };
 
 struct CommandMessage {
