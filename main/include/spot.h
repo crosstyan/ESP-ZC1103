@@ -6,6 +6,7 @@
 #define SIMPLE_SPOT_H
 #include "cnl_def.h"
 #include "error.h"
+#include "wrapper.pb.h"
 #include <etl/unordered_map.h>
 #include <etl/vector.h>
 #include <etl/delegate.h>
@@ -80,9 +81,9 @@ struct SetCurrent {
 };
 
 enum class Command {
-  START = 0x00,
-  STOP  = 0x01,
-  Ping = 0x06
+  START = Command_Start,
+  STOP  = Command_Stop,
+  Ping = Command_Ping,
 };
 
 struct CommandMessage {
