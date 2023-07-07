@@ -24,7 +24,6 @@ const auto MAX_TRACK_SIZE      = 3;
 // could choose fixed_8_8 or fixed_16_16
 using speed_type = fixed_8_8;
 
-
 inline static int64_t millis() {
   return (esp_timer_get_time() / 1000);
 }
@@ -80,7 +79,14 @@ struct SetCurrent {
   }
 };
 
-struct Ping {};
+struct Ping {
+  static size_t sizeNeeded() {
+    // magic
+    size_t sz = 0;
+    sz += sizeof PING_MAGIC;
+    return sz;
+  }
+};
 
 struct SpotConfig {
   fixed_16_16 circleLength;
@@ -480,6 +486,21 @@ public:
     return size;
   }
 
+  /**
+   * @brief return size needed to serialize
+   */
+  static size_t sizeNeeded(etl::ivector<Track> &tracks) {
+    size_t size = 0;
+    size += 1; // magic
+    size += 1; // track count
+    for (auto &track : tracks) {
+      auto tSize = track.sizeNeeded();
+      size += tSize;
+    }
+    return size;
+  }
+
+  /// serialize tracks the Spot object has to bytes
   size_t toBytes(uint8_t *bytes) {
     size_t offset = 0;
     bytes[offset] = SPOT_MAGIC;
@@ -489,6 +510,21 @@ public:
     for (auto &track : tracks) {
       auto &[t, calc] = track;
       auto tSize      = serd::toBytes(t, bytes + offset);
+      offset += tSize;
+    }
+    return offset;
+  }
+
+  /// serialize a vector of Track to bytes with Spot format.
+  /// Spot is just a wrapper of many tracks.
+  static size_t toBytes(etl::ivector<Track> &tracks, uint8_t *bytes) {
+    size_t offset = 0;
+    bytes[offset] = SPOT_MAGIC;
+    offset += 1;
+    bytes[offset] = static_cast<uint8_t>(tracks.size());
+    offset += 1;
+    for (auto &track : tracks) {
+      auto tSize = serd::toBytes(track, bytes + offset);
       offset += tSize;
     }
     return offset;

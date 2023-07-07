@@ -14,9 +14,11 @@
 // #include <variant>
 
 namespace RfMessage {
-const static auto ADDR_SIZE = 3;
-using AddrArray             = etl::array<uint8_t, ADDR_SIZE>;
-using Message               = etl::variant<RfMessage::Tracks, RfMessage::SpotConfig, RfMessage::Ping, RfMessage::SetCurrent>;
+const static auto MAX_RF_PAYLOAD_SIZE = 500;
+const static auto ADDR_SIZE           = 3;
+using AddrArray                       = etl::array<uint8_t, ADDR_SIZE>;
+using Message                         = etl::variant<RfMessage::Tracks, RfMessage::SpotConfig, RfMessage::Ping, RfMessage::SetCurrent>;
+using RfPayload                       = etl::vector<uint8_t, MAX_RF_PAYLOAD_SIZE>;
 // certain target or broadcast
 using Destination = etl::variant<AddrArray, uint32_t>;
 
@@ -39,7 +41,7 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
   msg.destination.device.arg           = &addr;
   auto dummy_tracks                    = Tracks{};
   msg.payload.spot.tracks.funcs.decode = [](pb_istream_t *stream, const pb_field_t *field, void **arg) {
-    auto &tracks          = *static_cast<etl::vector<RfMessage::Track, MAX_TRACK_SIZE> *>(*arg);
+    auto &tracks          = *static_cast<Tracks *>(*arg);
     auto track            = Track{};
     ::Track t             = Track_init_zero;
     t.speeds.funcs.decode = [](pb_istream_t *stream, const pb_field_t *field, void **arg) {
@@ -91,7 +93,7 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
       cfg.lineLength     = fixed_16_16{msg.payload.config.line_length};
       cfg.current        = msg.payload.config.current;
       cfg.updateInterval = msg.payload.config.update_interval;
-      ret.msg            = std::move(cfg);
+      ret.msg            = cfg;
       break;
     }
     case BleMessage_ping_tag: {
@@ -101,7 +103,7 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
     case BleMessage_set_current_tag: {
       auto set_current       = SetCurrent{};
       set_current.current_id = msg.payload.set_current;
-      ret.msg                = std::move(set_current);
+      ret.msg                = set_current;
       break;
     }
     default:
@@ -110,6 +112,44 @@ etl::optional<BleMsgDecodeRes> decodeBleMsg(const uint8_t *buffer, size_t size) 
   return etl::make_optional(ret);
 }
 
+struct EncodeVistor {
+  RfPayload operator()(RfMessage::Tracks &tracks) {
+    auto payload = RfPayload{};
+    auto sz      = RfMessage::Spot::sizeNeeded(tracks);
+    payload.resize(sz);
+    auto out_sz = RfMessage::Spot::toBytes(tracks, payload.data());
+    assert(out_sz == sz);
+    return payload;
+  }
+  RfPayload operator()(RfMessage::SpotConfig &config) {
+    auto payload = RfPayload{};
+    auto sz      = RfMessage::SpotConfig::sizeNeeded();
+    payload.resize(sz);
+    auto out_sz = RfMessage::serd::toBytes(config, payload.data());
+    assert(out_sz == sz);
+    return payload;
+  }
+  RfPayload operator()(RfMessage::Ping &ping) {
+    auto payload = RfPayload{};
+    auto sz      = RfMessage::Ping::sizeNeeded();
+    payload.resize(sz);
+    auto out_sz = RfMessage::serd::toBytes(ping, payload.data());
+    assert(out_sz == sz);
+    return payload;
+  }
+  RfPayload operator()(RfMessage::SetCurrent &set_current) {
+    auto payload = RfPayload{};
+    auto sz      = RfMessage::SetCurrent::sizeNeeded();
+    payload.resize(sz);
+    auto out_sz = RfMessage::serd::toBytes(set_current, payload.data());
+    assert(out_sz == sz);
+    return payload;
+  }
+};
+
+RfPayload toBytes(Message &message) {
+  return etl::visit(EncodeVistor{}, message);
+}
 }
 
 #endif // TRACKRF_MESSAGE_H

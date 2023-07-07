@@ -19,6 +19,7 @@
 #include <NimBLEDevice.h>
 #include <rtc_wdt.h>
 #include "message.h"
+#include "pkt_id.h"
 
 // https://stackoverflow.com/questions/64017982/c-equivalent-of-rust-enums
 // https://thatonegamedev.com/cpp/rust-enums-in-modern-cpp/
@@ -40,6 +41,7 @@ static auto const RX_EN     = GPIO_NUM_26;
 static auto const BLE_NAME             = "TRACK_HUB";
 static auto const BLE_SERVER_UUID      = "1f6cc873-c9d4-49c0-845c-02dbd21e4fe3";
 static auto const BLE_CONFIG_CHAR_UUID = "77de9e2b-66e1-42e8-9b1f-5dae1c5f2737";
+static uint8_t const HUB_SRC_ADDR[3]   = {0x00, 0x00, 0x01};
 
 /// global flag to indicate packet reception
 static bool RX_FLAG = false;
@@ -61,7 +63,7 @@ using BleMsgChan = msd::channel<RfMessage::BleMsgDecodeRes>;
 
 class ConfigCharCallback : public BLECharacteristicCallbacks {
 private:
-  std::shared_ptr<BleMsgChan> channel_;
+  std::shared_ptr<RfMessageChan> channel_;
   MessageWrapper::Decoder decoder_;
 
 public:
@@ -76,8 +78,25 @@ public:
       auto maybe_ble_res = RfMessage::decodeBleMsg(payload.data(), payload.size());
       if (maybe_ble_res.has_value()) {
         auto &ble_res = maybe_ble_res.value();
-        auto &chan    = *channel_;
-        chan << ble_res;
+        auto dst      = etl::array<uint8_t, 3>{};
+        if (etl::holds_alternative<RfMessage::AddrArray>(ble_res.dest)) {
+          dst = etl::get<RfMessage::AddrArray>(ble_res.dest);
+        } else if (etl::holds_alternative<uint32_t>(ble_res.dest)) {
+          dst = etl::array<uint8_t, 3>{0xff, 0xff, 0xff};
+        } else {
+          ESP_LOGE("ble", "bad BLE message");
+          return;
+        }
+        auto &chan       = *channel_;
+        auto encoder     = MessageWrapper::Encoder(HUB_SRC_ADDR, dst.data(), PacketId::next());
+        auto msg_payload = RfMessage::toBytes(ble_res.msg);
+        // don't have to say but the `msg_payload` should live longer than the `encoder` until the `encoder` is done
+        encoder.setPayload(msg_payload.data(), msg_payload.size());
+        auto r = encoder.next();
+        while (r.has_value()) {
+          chan << r.value();
+          r = encoder.next();
+        }
         decoder_.reset();
       } else {
         ESP_LOGE("ble", "bad BLE message");
@@ -89,7 +108,7 @@ public:
       ESP_LOGE("ble", "failed to decode BLE message: %s", reason);
     }
   };
-  explicit ConfigCharCallback(std::shared_ptr<BleMsgChan> channel) : channel_(std::move(channel)) {
+  explicit ConfigCharCallback(std::shared_ptr<RfMessageChan> channel) : channel_(std::move(channel)) {
     decoder_ = MessageWrapper::Decoder();
   };
 };
@@ -124,14 +143,13 @@ void app_main() {
   auto &config_char = *service.createCharacteristic(
       BLE_CONFIG_CHAR_UUID,
       NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-  auto ble_chan = std::make_shared<BleMsgChan>();
-  config_char.setCallbacks(new ConfigCharCallback(ble_chan));
+  auto chan = std::make_shared<RfMessageChan>();
+  config_char.setCallbacks(new ConfigCharCallback(chan));
   advertising.setName(BLE_NAME);
   advertising.setScanResponse(false);
   service.start();
   server.start();
 
-  auto chan               = std::make_shared<RfMessageChan>();
   auto rf_send_task_param = RfTaskParam{
       .rf      = &rf,
       .channel = chan,
