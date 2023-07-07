@@ -461,9 +461,18 @@ private:
   SpotConfig config;
 
 public:
-  explicit Spot(SpotConfig config) : config(config) {
-    state = SpotState::STOP;
+  explicit Spot() {
+    config = SpotConfig();
+    state  = SpotState::STOP;
+  }
+  explicit Spot(SpotConfig config) {
+    setConfig(config);
   };
+
+  void setConfig(SpotConfig cfg) {
+    state        = SpotState::STOP;
+    this->config = cfg;
+  }
 
   [[nodiscard]] const auto &getConfig() const {
     return config;
