@@ -10,6 +10,8 @@
 #include <etl/unordered_map.h>
 #include <etl/vector.h>
 #include <etl/delegate.h>
+#include <etl/numeric.h>
+#include <ranges>
 #include <etl/expected.h>
 
 namespace RfMessage {
@@ -241,7 +243,7 @@ public:
       return etl::expected<Track, ParseResult>(ue);
     }
     offset += sizeof speed_count;
-    for (auto j = 0; j < speed_count; ++j) {
+    for (auto _ : std::views::iota(0, static_cast<int>(speed_count))) {
       auto distance = __ntohs(*reinterpret_cast<uint16_t *>(bytes + offset));
       if (distance > 6000) {
         auto ue = etl::unexpected<ParseResult>(ParseResult::VALUE_ERROR);
@@ -427,24 +429,24 @@ etl::vector<uint16_t, MAX_ENABLED_ID_SIZE> calcEnabledId(const CalcState &state,
 
   if (headDist > state.maxDistance) {
     // range(tailSpotId, spot.total)
-    for (auto i = tailSpotId; i < spot.total; i++) {
-      enabledIds.push_back(i);
+    // for (auto i = tailSpotId; i < spot.total; i++) {
+    for (auto id : std::views::iota(tailSpotId, spot.total)) {
+      enabledIds.push_back(id);
     }
   } else if (extra.has_value()) {
-    // range(0, headSpotId)
-    for (auto i = 0; i < headSpotId; i++) {
-      enabledIds.push_back(i);
+    // for (auto i = 0; i < headSpotId; i++) {
+    for (auto id : std::views::iota(0, static_cast<int>(headSpotId))) {
+      enabledIds.push_back(id);
     }
     if (headDist >= spot.circleLength) {
-      // range(tailSpotId, spot.total)
-      for (auto i = tailSpotId; i < spot.total; i++) {
-        enabledIds.push_back(i);
+      // for (auto i = tailSpotId; i < spot.total; i++) {
+      for (auto id : std::views::iota(tailSpotId, spot.total)) {
+        enabledIds.push_back(id);
       }
     }
   } else {
-    // range(tailSpotId, headSpotId)
-    for (auto i = tailSpotId; i < headSpotId; i++) {
-      enabledIds.push_back(i);
+    for (auto id : std::views::iota(tailSpotId, headSpotId)) {
+      enabledIds.push_back(id);
     }
   }
 
@@ -494,7 +496,7 @@ public:
       return ParseResult::VALUE_ERROR;
     }
     offset += 1;
-    for (auto i = 0; i < track_count; ++i) {
+    for (auto _ : std::views::iota(0, static_cast<int>(track_count))) {
       auto track = Track::fromBytes(bytes + offset);
       if (!track.has_value()) {
         return track.error();
